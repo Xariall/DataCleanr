@@ -1,0 +1,5 @@
+email,name,updated_at
+alice@x.com,Alice,2024-01-01
+bob@x.com,Bob,2024-01-02
+alice@x.com,Alice Updated,2024-03-15
+bob@x.com,Bob Old,2023-12-01
