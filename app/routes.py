@@ -4,7 +4,6 @@ import os
 from google import genai
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
-from google.api_core.exceptions import GoogleAPICallError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -66,7 +65,7 @@ Keep each field to 1-2 sentences. Be specific about column names if mentioned.""
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=8),
-    retry=retry_if_exception_type(GoogleAPICallError),
+    retry=retry_if_exception_type(Exception),
     reraise=True,
 )
 async def _call_llm(prompt: str, max_tokens: int = 2048) -> str:
@@ -152,7 +151,7 @@ async def explain(request: Request, instructions: str = Form(...)):
 
     try:
         raw = await _call_llm(_EXPLAIN_PROMPT.format(instructions=instructions), max_tokens=512)
-    except GoogleAPICallError:
+    except Exception:
         raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
 
     try:
@@ -245,7 +244,7 @@ async def _run_transform(
 
     try:
         code = await _call_llm(prompt)
-    except GoogleAPICallError:
+    except Exception:
         raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
 
     # For preview: slice to first PREVIEW_ROWS before execution
