@@ -125,8 +125,17 @@ async def execute_script(
         with open(runner_path, "w") as fh:
             fh.write(runner_src)
 
-        # Minimal environment — strip all secrets from subprocess
-        env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "PYTHONPATH": ""}
+        # Strip secrets but preserve system library paths for numpy/pandas
+        _PASSTHROUGH = {"PATH", "PYTHONPATH", "HOME", "LANG", "LC_ALL",
+                        "LD_LIBRARY_PATH", "LD_PRELOAD", "NIX_LD_LIBRARY_PATH"}
+        _SECRET_PREFIXES = ("ANTHROPIC", "GEMINI", "REDIS", "STRIPE",
+                            "DATABASE", "SENTRY", "SECRET", "KEY", "TOKEN",
+                            "PASSWORD", "PASS", "RAILWAY")
+        env = {
+            k: v for k, v in os.environ.items()
+            if k in _PASSTHROUGH or not any(k.upper().startswith(p) for p in _SECRET_PREFIXES)
+        }
+        env.setdefault("PATH", "/usr/bin:/bin:/usr/local/bin")
 
         try:
             proc = await asyncio.create_subprocess_exec(
