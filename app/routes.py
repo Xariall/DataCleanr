@@ -1,9 +1,10 @@
 import json
 import os
 
-import anthropic
+from google import genai
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
+from google.api_core.exceptions import GoogleAPICallError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -24,8 +25,11 @@ from .sandbox import execute_script
 
 router = APIRouter()
 
-_CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
-_client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+
+def _get_client() -> genai.Client:
+    return genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 MAX_INSTRUCTIONS = 2000
 PREVIEW_ROWS = 10
@@ -62,16 +66,16 @@ Keep each field to 1-2 sentences. Be specific about column names if mentioned.""
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=8),
-    retry=retry_if_exception_type(anthropic.APIStatusError),
+    retry=retry_if_exception_type(GoogleAPICallError),
     reraise=True,
 )
-async def _call_claude(prompt: str, max_tokens: int = 2048) -> str:
-    msg = await _client.messages.create(
-        model=_CLAUDE_MODEL,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
+async def _call_llm(prompt: str, max_tokens: int = 2048) -> str:
+    response = await _get_client().aio.models.generate_content(
+        model=_GEMINI_MODEL,
+        contents=prompt,
+        config={"max_output_tokens": max_tokens},
     )
-    return msg.content[0].text.strip()
+    return response.text.strip()
 
 
 @router.get("/health")
@@ -147,8 +151,8 @@ async def explain(request: Request, instructions: str = Form(...)):
         )
 
     try:
-        raw = await _call_claude(_EXPLAIN_PROMPT.format(instructions=instructions), max_tokens=512)
-    except anthropic.APIError:
+        raw = await _call_llm(_EXPLAIN_PROMPT.format(instructions=instructions), max_tokens=512)
+    except GoogleAPICallError:
         raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
 
     try:
@@ -240,8 +244,8 @@ async def _run_transform(
     prompt = _TRANSFORM_PROMPT.format(sample=sample_csv, instructions=instructions)
 
     try:
-        code = await _call_claude(prompt)
-    except anthropic.APIError:
+        code = await _call_llm(prompt)
+    except GoogleAPICallError:
         raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
 
     # For preview: slice to first PREVIEW_ROWS before execution

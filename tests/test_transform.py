@@ -12,8 +12,8 @@ CSV_WITH_NULLS = b"name,email,score\nAlice,a@x.com,90\nBob,,80\nCarol,c@x.com,\n
 CLEAN_CODE = "df = df.dropna()"
 
 
-def _mock_claude(code: str):
-    return patch("app.routes._call_claude", new=AsyncMock(return_value=code))
+def _mock_llm(code: str):
+    return patch("app.routes._call_llm", new=AsyncMock(return_value=code))
 
 
 def _mock_rate_limit(allowed: bool = True, used: int = 0, limit: int = 500):
@@ -26,7 +26,7 @@ def _mock_rate_limit(allowed: bool = True, used: int = 0, limit: int = 500):
 
 def test_transform_happy_path(client, registered_user):
     _, api_key = registered_user
-    with _mock_rate_limit(), _mock_claude(CLEAN_CODE), patch("app.routes.commit_row_usage", new=AsyncMock()):
+    with _mock_rate_limit(), _mock_llm(CLEAN_CODE), patch("app.routes.commit_row_usage", new=AsyncMock()):
         r = client.post(
             "/transform",
             headers={"X-API-Key": api_key},
@@ -41,7 +41,7 @@ def test_transform_happy_path(client, registered_user):
 
 def test_transform_returns_summary_header(client, registered_user):
     _, api_key = registered_user
-    with _mock_rate_limit(), _mock_claude(CLEAN_CODE), patch("app.routes.commit_row_usage", new=AsyncMock()):
+    with _mock_rate_limit(), _mock_llm(CLEAN_CODE), patch("app.routes.commit_row_usage", new=AsyncMock()):
         r = client.post(
             "/transform",
             headers={"X-API-Key": api_key},
@@ -77,7 +77,7 @@ def test_transform_file_too_large(client, registered_user):
 
 def test_transform_blocked_instructions(client, registered_user):
     _, api_key = registered_user
-    with _mock_rate_limit(), _mock_claude("import os; os.system('rm -rf /')"):
+    with _mock_rate_limit(), _mock_llm("import os; os.system('rm -rf /')"):
         r = client.post(
             "/transform",
             headers={"X-API-Key": api_key},
@@ -90,7 +90,7 @@ def test_transform_blocked_instructions(client, registered_user):
 
 def test_transform_llm_noop(client, registered_user):
     _, api_key = registered_user
-    with _mock_rate_limit(), _mock_claude("# DataCleanr-noop: true"):
+    with _mock_rate_limit(), _mock_llm("# DataCleanr-noop: true"):
         r = client.post(
             "/transform",
             headers={"X-API-Key": api_key},
@@ -104,7 +104,7 @@ def test_transform_llm_noop(client, registered_user):
 def test_preview_returns_at_most_10_rows(client, registered_user):
     _, api_key = registered_user
     big_csv = b"id\n" + b"\n".join(str(i).encode() for i in range(50)) + b"\n"
-    with _mock_claude("pass  # df unchanged"):
+    with _mock_llm("pass  # df unchanged"):
         r = client.post(
             "/preview",
             headers={"X-API-Key": api_key},
@@ -120,7 +120,7 @@ def test_preview_no_quota_deducted(client, registered_user):
     """Preview should not touch the rate-limit counter."""
     _, api_key = registered_user
     with patch("app.routes.commit_row_usage", new=AsyncMock()) as mock_commit:
-        with _mock_claude("pass"):
+        with _mock_llm("pass"):
             client.post(
                 "/preview",
                 headers={"X-API-Key": api_key},
