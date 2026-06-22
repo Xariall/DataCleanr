@@ -1,5 +1,8 @@
 import json
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 from google import genai
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -244,7 +247,8 @@ async def _run_transform(
 
     try:
         code = await _call_llm(prompt)
-    except Exception:
+    except Exception as exc:
+        logger.error("LLM call failed: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
 
     # For preview: slice to first PREVIEW_ROWS before execution
