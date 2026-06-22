@@ -24,7 +24,7 @@ from .sandbox import execute_script
 
 router = APIRouter()
 
-_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 def _get_client() -> genai.Client:
