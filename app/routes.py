@@ -253,6 +253,7 @@ async def _run_transform(
 
     try:
         code = await _call_llm(prompt)
+        logger.info("Generated code: %r", code[:200])
     except Exception as exc:
         logger.error("LLM call failed: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
@@ -283,6 +284,7 @@ async def _run_transform(
         )
     except RuntimeError as exc:
         msg = str(exc)
+        logger.error("Sandbox error: %s", msg)
         if "TRANSFORM_TIMEOUT" in msg:
             raise HTTPException(status_code=502, detail={"error": "Transform timed out", "code": "TRANSFORM_TIMEOUT"})
         raise HTTPException(status_code=502, detail={"error": "Transform failed", "code": "TRANSFORM_FAILED"})
