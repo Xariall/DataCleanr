@@ -77,7 +77,13 @@ async def _call_llm(prompt: str, max_tokens: int = 2048) -> str:
         contents=prompt,
         config={"max_output_tokens": max_tokens},
     )
-    return response.text.strip()
+    return _strip_code_fences(response.text.strip())
+
+
+def _strip_code_fences(text: str) -> str:
+    """Remove markdown code fences LLMs sometimes add despite instructions."""
+    import re
+    return re.sub(r"^```(?:python)?\n?|```$", "", text, flags=re.MULTILINE).strip()
 
 
 @router.get("/health")
