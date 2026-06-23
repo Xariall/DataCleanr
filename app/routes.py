@@ -372,10 +372,13 @@ _TRANSFORM_PROMPT = """\
 You are a pandas data transformation expert. You receive a CSV sample and instructions.
 Write a Python script that transforms the pandas DataFrame named `df`.
 
-Rules:
-- `df` is already loaded as a pandas DataFrame. Modify or reassign it.
-- Do NOT import anything. `pd` (pandas) and `np` (numpy) are already available.
-- Do NOT use eval(), exec(), pd.eval(), .query(), pd.read_*(), or any file I/O.
+Strict rules — violations will cause an error:
+- `df` is already loaded as a pandas DataFrame. Only modify or reassign `df`.
+- Do NOT add any import statements. `pd` and `np` are already available.
+- NEVER use: eval(), exec(), compile(), open(), getattr(), setattr(), __import__()
+- NEVER use: pd.eval(), df.query(), pd.read_csv(), pd.read_excel(), pd.read_json()
+- NEVER reference: __class__, __bases__, __subclasses__, builtins
+- Use boolean indexing instead of .query(): write `df[df['col'] > 0]` not `df.query('col > 0')`
 - If you cannot interpret the instructions, output ONLY: # DataCleanr-noop: true
 
 CSV header + first 10 rows:
@@ -694,10 +697,16 @@ async def _run_transform(
     except ValueError as exc:
         code_str = str(exc)
         if "BLOCKED_INSTRUCTIONS" in code_str:
+            reason = code_str.replace("BLOCKED_INSTRUCTIONS: ", "", 1)
+            logger.warning("blocked user=%s reason=%r code=%r", user["email"], reason, code[:300])
             raise HTTPException(
                 status_code=400,
-                detail={"error": "Instructions reference blocked operations", "code": "BLOCKED_INSTRUCTIONS",
-                        "try": "Rephrase to avoid eval/exec/file operations"},
+                detail={
+                    "error": "Generated code contains a blocked operation",
+                    "code": "BLOCKED_INSTRUCTIONS",
+                    "reason": reason,
+                    "try": "Rephrase your instructions to avoid filtering patterns like .query() or eval()",
+                },
             )
         raise HTTPException(
             status_code=400,
