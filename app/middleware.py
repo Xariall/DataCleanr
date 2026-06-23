@@ -19,7 +19,7 @@ RATE_LIMIT_TTL = 86400  # 24 h in seconds
 REDIS_TIMEOUT = 1.0     # seconds before we consider Redis unavailable
 
 # Paths that require a valid X-API-Key header
-_AUTH_PATHS = frozenset({"/transform", "/explain", "/preview", "/me"})
+_AUTH_PATHS = frozenset({"/transform", "/explain", "/preview", "/me", "/rotate-key"})
 
 # Paths where row-budget is checked and decremented
 _RATE_LIMIT_PATHS = frozenset({"/transform", "/explain"})

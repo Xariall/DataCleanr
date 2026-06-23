@@ -62,6 +62,18 @@ def create_user(email: str) -> str:
     return api_key
 
 
+def rotate_api_key(user_id: int) -> str:
+    """Generate a new API key for an existing user. Old key is immediately invalidated."""
+    new_key = generate_api_key()
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE users SET api_key_hash = ? WHERE id = ?",
+            (hash_key(new_key), user_id),
+        )
+        conn.commit()
+    return new_key
+
+
 def get_user_by_key_hash(key_hash: str) -> sqlite3.Row | None:
     with _conn() as conn:
         return conn.execute(

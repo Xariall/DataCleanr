@@ -128,3 +128,36 @@ def test_preview_no_quota_deducted(client, registered_user):
                 files={"file": ("data.csv", CSV_CLEAN, "text/csv")},
             )
         mock_commit.assert_not_called()
+
+
+def test_transform_returns_rate_limit_headers(client, registered_user):
+    _, api_key = registered_user
+    with _mock_rate_limit(used=100, limit=500), _mock_llm(CLEAN_CODE), patch("app.routes.commit_row_usage", new=AsyncMock()):
+        r = client.post(
+            "/transform",
+            headers={"X-API-Key": api_key},
+            data={"instructions": "remove nulls"},
+            files={"file": ("data.csv", CSV_WITH_NULLS, "text/csv")},
+        )
+    assert r.status_code == 200
+    assert r.headers["X-RateLimit-Limit"] == "500"
+    assert "X-RateLimit-Remaining" in r.headers
+    assert "X-RateLimit-Reset" in r.headers
+
+
+def test_rotate_key(client, registered_user):
+    email, old_key = registered_user
+    r = client.post("/rotate-key", headers={"X-API-Key": old_key})
+    assert r.status_code == 200
+    new_key = r.json()["api_key"]
+    assert new_key.startswith("dc_")
+    assert new_key != old_key
+
+    # Old key must no longer work
+    r2 = client.get("/me", headers={"X-API-Key": old_key})
+    assert r2.status_code == 401
+
+    # New key must work
+    r3 = client.get("/me", headers={"X-API-Key": new_key})
+    assert r3.status_code == 200
+    assert r3.json()["email"] == email

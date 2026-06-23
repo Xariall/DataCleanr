@@ -2,8 +2,15 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _seconds_until_midnight() -> int:
+    now = datetime.now(timezone.utc)
+    midnight = now.replace(hour=23, minute=59, second=59, microsecond=0)
+    return max(0, int((midnight - now).total_seconds()))
 
 from google import genai
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -15,7 +22,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from .database import create_user
+from .database import create_user, rotate_api_key
 from .format_detect import (
     MAX_FILE_SIZE,
     build_llm_sample,
@@ -351,6 +358,18 @@ async def me(request: Request):
     }
 
 
+@router.post("/rotate-key")
+async def rotate_key(request: Request):
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail={"error": "Unauthorized", "code": "MISSING_API_KEY"})
+    new_key = rotate_api_key(user["id"])
+    return {
+        "api_key": new_key,
+        "message": "Old key is immediately invalidated. Store this key safely — it will not be shown again.",
+    }
+
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}
@@ -445,7 +464,11 @@ async def explain(request: Request, instructions: str = Form(...)):
         will_not = ""
 
     await commit_row_usage(user, 1)
-    return {"will": will, "will_not": will_not}
+    return {
+        "will": will,
+        "will_not": will_not,
+        "tip": "Use /preview with the same instructions to dry-run on your actual data.",
+    }
 
 
 async def _run_transform(
@@ -500,25 +523,34 @@ async def _run_transform(
             detail={"error": "Uploaded file has no data rows", "code": "EMPTY_FILE"},
         )
 
-    # Rate-limit check (preview skips deduction but still validates key)
-    if not preview:
-        try:
-            allowed, used, limit = await check_row_budget(user, row_count)
-        except RuntimeError:
+    # Rate-limit check — always fetch used/limit for response headers
+    _check_count = row_count if not preview else 0
+    try:
+        allowed, used, limit = await check_row_budget(user, _check_count)
+    except RuntimeError:
+        if not preview:
             raise HTTPException(
                 status_code=503,
                 detail={"error": "Rate-limit service unavailable", "code": "SERVICE_UNAVAILABLE"},
             )
-        if not allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": f"Daily row budget exceeded ({used}/{limit})",
-                    "code": "RATE_LIMIT_EXCEEDED",
-                    "retry_after": 3600,
-                    "try": "Upgrade to paid at /upgrade for 500K rows/day",
-                },
-            )
+        from .middleware import FREE_DAILY_ROWS, PAID_DAILY_ROWS
+        used, limit = 0, PAID_DAILY_ROWS if user["tier"] == "PAID" else FREE_DAILY_ROWS
+        allowed = True
+
+    if not preview and not allowed:
+        raise HTTPException(
+            status_code=429,
+            headers={
+                "X-RateLimit-Limit": str(limit),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(_seconds_until_midnight()),
+            },
+            detail={
+                "error": f"Daily row budget exceeded ({used}/{limit})",
+                "code": "RATE_LIMIT_EXCEEDED",
+                "retry_after": _seconds_until_midnight(),
+            },
+        )
 
     # Build LLM prompt from header + first 10 rows
     sample_csv, _ = build_llm_sample(df, n=10)
@@ -594,11 +626,15 @@ async def _run_transform(
         "preview": preview,
     }
 
+    rows_after = used + (row_count if not preview else 0)
     headers: dict[str, str] = {
         "X-DataCleanr-Summary": (
-            f"Removed {rows_removed} rows, {input_rows - out_rows} rows remaining"
+            f"Removed {rows_removed} rows, {out_rows} rows remaining"
         ),
         "X-DataCleanr-Stats": str(summary),
+        "X-RateLimit-Limit": str(limit),
+        "X-RateLimit-Remaining": str(max(0, limit - rows_after)),
+        "X-RateLimit-Reset": str(_seconds_until_midnight()),
     }
 
     # Warn if >30% rows removed
