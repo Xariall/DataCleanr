@@ -8,7 +8,7 @@ Completed tasks move to `tasks/done/`.
 | File | Priority | Status |
 |------|----------|--------|
 | [01-railway-deploy.md](01-railway-deploy.md) | P0 | **DONE** |
-| [02-stripe-setup.md](02-stripe-setup.md) | P0 | Skipped (post-launch) |
+| [02-stripe-setup.md](02-stripe-setup.md) | P0 | On hold — needs registered business |
 | [03-show-hn.md](03-show-hn.md) | P1 | Ready to post (free tier) |
 | [04-ci-cd.md](04-ci-cd.md) | P1 | **DONE** |
 

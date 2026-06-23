@@ -227,34 +227,23 @@ _LANDING_HTML = """<!DOCTYPE html>
 </div>
 
 <div class="section" id="pricing">
-  <div class="section-title">Simple pricing</div>
-  <div class="pricing">
-    <div class="plan">
+  <div class="section-title">Free to get started</div>
+  <div class="pricing" style="max-width:420px;margin:0 auto;">
+    <div class="plan featured">
       <div class="plan-name">Free</div>
       <div class="plan-price">$0 <span>/ month</span></div>
       <div class="plan-desc">No credit card. Get started in 30 seconds.</div>
       <ul class="plan-features">
         <li>500 rows / day</li>
         <li>CSV, JSON, xlsx input</li>
-        <li>/preview endpoint</li>
-        <li>Full API access</li>
+        <li>/preview — dry-run first 10 rows</li>
+        <li>/me — check your daily usage</li>
+        <li>Full API access at /docs</li>
       </ul>
-      <a class="plan-btn" href="/docs">Get free API key</a>
-    </div>
-    <div class="plan featured">
-      <div class="plan-tag">Most popular</div>
-      <div class="plan-name">Paid</div>
-      <div class="plan-price">$9 <span>/ month</span></div>
-      <div class="plan-desc">For teams and production pipelines.</div>
-      <ul class="plan-features">
-        <li>500,000 rows / day</li>
-        <li>CSV, JSON, xlsx input</li>
-        <li>/preview endpoint</li>
-        <li>Priority support</li>
-      </ul>
-      <a class="plan-btn" href="/upgrade">Upgrade &rarr;</a>
+      <a class="plan-btn" href="/docs">Get free API key &rarr;</a>
     </div>
   </div>
+  <p style="text-align:center;margin-top:1.5rem;font-size:0.875rem;color:var(--muted);">Need higher limits? <a href="mailto:supersanin45@gmail.com">Contact us</a></p>
 </div>
 
 <footer>
@@ -393,6 +382,14 @@ async def register(request: Request):
     return {
         "api_key": api_key,
         "message": "Store this key safely — it will not be shown again.",
+        "next_step": (
+            f'curl -X POST https://datacleanr-production.up.railway.app/transform'
+            f' -H "X-API-Key: {api_key}"'
+            f' -F "file=@data.csv"'
+            f' -F "instructions=remove rows where email is empty"'
+            f' -o clean.csv'
+        ),
+        "docs": "https://datacleanr-production.up.railway.app/docs",
     }
 
 
