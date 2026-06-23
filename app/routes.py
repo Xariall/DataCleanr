@@ -415,9 +415,11 @@ async def _call_llm(prompt: str, max_tokens: int = 2048) -> str:
 
 
 def _strip_code_fences(text: str) -> str:
-    """Remove markdown code fences LLMs sometimes add despite instructions."""
+    """Remove only the outermost markdown code fence, not backticks inside the code."""
     import re
-    return re.sub(r"^```(?:python)?\n?|```$", "", text, flags=re.MULTILINE).strip()
+    text = re.sub(r"^\s*```(?:python|py)?\s*\n?", "", text)
+    text = re.sub(r"\n?\s*```\s*$", "", text)
+    return text.strip()
 
 
 def _extract_stderr_hint(runtime_msg: str) -> str:
@@ -674,13 +676,17 @@ async def _run_transform(
     prompt = _TRANSFORM_PROMPT.format(sample=sample_csv, instructions=instructions)
 
     t0 = time.monotonic()
-    try:
-        code = await _call_llm(prompt)
-        llm_ms = int((time.monotonic() - t0) * 1000)
-        logger.info("llm_ok user=%s rows=%d llm_ms=%d", user["email"], row_count, llm_ms)
-    except Exception as exc:
-        logger.error("llm_fail user=%s error=%s: %s", user["email"], type(exc).__name__, exc)
-        raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
+    code = ""
+    for _attempt in range(2):  # retry once on syntax error
+        try:
+            code = await _call_llm(prompt)
+            llm_ms = int((time.monotonic() - t0) * 1000)
+            logger.info("llm_ok user=%s rows=%d llm_ms=%d attempt=%d", user["email"], row_count, llm_ms, _attempt + 1)
+            break
+        except Exception as exc:
+            logger.error("llm_fail user=%s attempt=%d error=%s: %s", user["email"], _attempt + 1, type(exc).__name__, exc)
+            if _attempt == 1:
+                raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
 
     # For preview: slice to first PREVIEW_ROWS before execution
     if preview:
@@ -698,6 +704,17 @@ async def _run_transform(
         code_str = str(exc)
         if "BLOCKED_INSTRUCTIONS" in code_str:
             reason = code_str.replace("BLOCKED_INSTRUCTIONS: ", "", 1)
+            if "SyntaxError" in reason:
+                # LLM produced malformed code — retry with simpler instructions
+                logger.warning("syntax_error user=%s reason=%r code=%r", user["email"], reason, code[:500])
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "error": "LLM generated malformed code",
+                        "code": "LLM_GENERATED_INVALID_CODE",
+                        "try": "Try again — the model occasionally generates invalid Python. If it keeps failing, simplify your instructions.",
+                    },
+                )
             logger.warning("blocked user=%s reason=%r code=%r", user["email"], reason, code[:300])
             raise HTTPException(
                 status_code=400,
