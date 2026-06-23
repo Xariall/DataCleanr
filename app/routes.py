@@ -397,8 +397,8 @@ Keep each field to 1-2 sentences. Be specific about column names if mentioned.""
 
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=8),
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=2, min=2, max=15),
     retry=retry_if_exception_type(Exception),
     reraise=True,
 )
