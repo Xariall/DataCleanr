@@ -35,7 +35,7 @@ from .sandbox import execute_script
 
 router = APIRouter()
 
-_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 
 _LANDING_HTML = """<!DOCTYPE html>
 <html lang="en">
