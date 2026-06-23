@@ -35,7 +35,8 @@ curl -X POST https://datacleanr-production.up.railway.app/transform \
 |--------|------|------|-------------|
 | `GET` | `/` | No | Landing page |
 | `POST` | `/register` | No | Get an API key |
-| `GET` | `/me` | Yes | Your tier + daily usage |
+| `GET` | `/me` | Yes | Tier, daily usage, remaining rows |
+| `POST` | `/rotate-key` | Yes | Invalidate old key, get new one |
 | `POST` | `/transform` | Yes | Transform a file |
 | `POST` | `/preview` | Yes | Dry-run on first 10 rows (no quota) |
 | `POST` | `/explain` | Yes | Explain what a transform will do |
@@ -119,11 +120,14 @@ Generated code is validated by an AST deny-list before execution:
 
 ## Response headers
 
-| Header | Example |
-|--------|---------|
-| `X-DataCleanr-Summary` | `Removed 12 rows, 88 rows remaining` |
-| `X-DataCleanr-Warning` | `Removed 45% of input rows - verify instructions` |
-| `X-Request-Id` | `550e8400-e29b-41d4-a716-446655440000` |
+| Header | Example | Notes |
+|--------|---------|-------|
+| `X-DataCleanr-Summary` | `Removed 12 rows, 88 rows remaining` | On every `/transform` |
+| `X-DataCleanr-Warning` | `Removed 45% of input rows - verify instructions` | When >30% rows removed |
+| `X-RateLimit-Limit` | `500` | Your daily row limit |
+| `X-RateLimit-Remaining` | `458` | Rows left today |
+| `X-RateLimit-Reset` | `3600` | Seconds until midnight UTC reset |
+| `X-Request-Id` | `550e8400-...` | On every response |
 
 ---
 
