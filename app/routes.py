@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -523,11 +524,13 @@ async def _run_transform(
     sample_csv, _ = build_llm_sample(df, n=10)
     prompt = _TRANSFORM_PROMPT.format(sample=sample_csv, instructions=instructions)
 
+    t0 = time.monotonic()
     try:
         code = await _call_llm(prompt)
-        logger.info("Generated code: %r", code[:200])
+        llm_ms = int((time.monotonic() - t0) * 1000)
+        logger.info("llm_ok user=%s rows=%d llm_ms=%d", user["email"], row_count, llm_ms)
     except Exception as exc:
-        logger.error("LLM call failed: %s: %s", type(exc).__name__, exc)
+        logger.error("llm_fail user=%s error=%s: %s", user["email"], type(exc).__name__, exc)
         raise HTTPException(status_code=502, detail={"error": "LLM unavailable", "code": "LLM_UNAVAILABLE"})
 
     # For preview: slice to first PREVIEW_ROWS before execution
@@ -539,6 +542,7 @@ async def _run_transform(
         input_csv = dataframe_to_csv_bytes(df)
         exec_timeout = 30.0
 
+    t1 = time.monotonic()
     try:
         output_csv = await execute_script(code, input_csv, timeout=exec_timeout)
     except ValueError as exc:
@@ -606,6 +610,13 @@ async def _run_transform(
     # Commit usage after success (not on preview)
     if not preview:
         await commit_row_usage(user, row_count)
+
+    sandbox_ms = int((time.monotonic() - t1) * 1000)
+    total_ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "transform_ok user=%s rows_in=%d rows_out=%d llm_ms=%d sandbox_ms=%d total_ms=%d preview=%s fmt=%s",
+        user["email"], input_rows, out_rows, llm_ms, sandbox_ms, total_ms, preview, fmt,
+    )
 
     return Response(
         content=output_csv,

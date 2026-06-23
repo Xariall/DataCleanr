@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -10,6 +11,12 @@ from .middleware import AuthMiddleware
 from .routes import router
 from .webhooks import webhooks_router
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+_log = logging.getLogger("datacleanr")
+
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
 
@@ -17,8 +24,11 @@ _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 async def lifespan(app: FastAPI):
     if _SENTRY_DSN:
         sentry_sdk.init(dsn=_SENTRY_DSN, traces_sample_rate=0.1)
+        _log.info("Sentry enabled")
     init_db()
+    _log.info("DataCleanr started — DB ready")
     yield
+    _log.info("DataCleanr shutdown")
 
 
 app = FastAPI(
