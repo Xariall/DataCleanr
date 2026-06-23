@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 from google import genai
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -28,6 +28,246 @@ from .sandbox import execute_script
 router = APIRouter()
 
 _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+_LANDING_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataCleanr — Clean CSV with plain English</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --border: #2a2a30;
+    --text: #e8e8ed;
+    --muted: #888892;
+    --accent: #6ee7b7;
+    --accent-dim: #1a3d31;
+    --code-bg: #111115;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --r: 8px;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* NAV */
+  nav { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 2rem; border-bottom: 1px solid var(--border); }
+  .logo { font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em; color: var(--text); }
+  .logo span { color: var(--accent); }
+  .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--muted); }
+  .nav-links a { color: var(--muted); }
+  .nav-cta { background: var(--accent); color: #0d0d0f; font-weight: 600; padding: 0.45rem 1rem; border-radius: var(--r); font-size: 0.875rem; }
+  .nav-cta:hover { text-decoration: none; opacity: 0.9; }
+
+  /* HERO */
+  .hero { max-width: 900px; margin: 0 auto; padding: 5rem 2rem 3rem; text-align: center; }
+  .badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--accent-dim); color: var(--accent); font-size: 0.78rem; font-weight: 600; padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid var(--accent); margin-bottom: 1.75rem; letter-spacing: 0.04em; text-transform: uppercase; }
+  h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 1.25rem; }
+  h1 em { color: var(--accent); font-style: normal; }
+  .subtitle { font-size: clamp(1rem, 2vw, 1.2rem); color: var(--muted); max-width: 600px; margin: 0 auto 2.5rem; }
+  .cta-row { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 3.5rem; }
+  .btn-primary { background: var(--accent); color: #0d0d0f; font-weight: 700; padding: 0.75rem 1.75rem; border-radius: var(--r); font-size: 1rem; }
+  .btn-primary:hover { text-decoration: none; opacity: 0.9; }
+  .btn-secondary { border: 1px solid var(--border); color: var(--muted); padding: 0.75rem 1.75rem; border-radius: var(--r); font-size: 1rem; }
+  .btn-secondary:hover { text-decoration: none; border-color: var(--muted); color: var(--text); }
+
+  /* CODE BLOCK */
+  .code-block { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r); text-align: left; overflow: auto; max-width: 720px; margin: 0 auto; }
+  .code-block-header { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; color: var(--muted); }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #f87171; } .dot.y { background: #fbbf24; } .dot.g { background: var(--accent); }
+  pre { padding: 1.25rem 1.5rem; font-size: 0.85rem; font-family: "SF Mono", "Fira Code", monospace; line-height: 1.7; overflow-x: auto; }
+  .c-muted { color: var(--muted); } .c-acc { color: var(--accent); } .c-str { color: #93c5fd; } .c-kw { color: var(--yellow); }
+
+  /* DIVIDER */
+  .section { max-width: 900px; margin: 0 auto; padding: 4rem 2rem; }
+  .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem; letter-spacing: -0.02em; text-align: center; }
+
+  /* FEATURES */
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+  .feature { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 1.5rem; }
+  .feature-icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+  .feature h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.4rem; }
+  .feature p { font-size: 0.875rem; color: var(--muted); }
+
+  /* HOW IT WORKS */
+  .steps { display: flex; flex-direction: column; gap: 1.25rem; }
+  .step { display: flex; gap: 1.25rem; align-items: flex-start; }
+  .step-num { flex-shrink: 0; width: 2rem; height: 2rem; border-radius: 50%; background: var(--accent-dim); border: 1px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: var(--accent); }
+  .step-body h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.2rem; }
+  .step-body p { font-size: 0.875rem; color: var(--muted); }
+  code { background: var(--code-bg); border: 1px solid var(--border); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.85em; font-family: "SF Mono", "Fira Code", monospace; color: var(--accent); }
+
+  /* PRICING */
+  .pricing { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
+  .plan { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 2rem; }
+  .plan.featured { border-color: var(--accent); position: relative; }
+  .plan-tag { position: absolute; top: -1px; right: 1.5rem; background: var(--accent); color: #0d0d0f; font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 0 0 6px 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .plan-name { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.5rem; }
+  .plan-price { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 0.25rem; }
+  .plan-price span { font-size: 1rem; font-weight: 400; color: var(--muted); }
+  .plan-desc { font-size: 0.875rem; color: var(--muted); margin-bottom: 1.5rem; }
+  .plan-features { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.75rem; }
+  .plan-features li { font-size: 0.875rem; display: flex; gap: 0.5rem; }
+  .plan-features li::before { content: "\\2713"; color: var(--accent); font-weight: 700; }
+  .plan-btn { display: block; text-align: center; padding: 0.65rem 1rem; border-radius: var(--r); font-weight: 600; font-size: 0.9rem; border: 1px solid var(--border); color: var(--muted); }
+  .plan.featured .plan-btn { background: var(--accent); color: #0d0d0f; border: none; }
+  .plan-btn:hover { text-decoration: none; opacity: 0.85; }
+
+  /* FOOTER */
+  footer { border-top: 1px solid var(--border); text-align: center; padding: 2rem; font-size: 0.85rem; color: var(--muted); }
+  footer a { color: var(--muted); margin: 0 0.5rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">Data<span>Cleanr</span></span>
+  <div class="nav-links">
+    <a href="/docs">API Docs</a>
+    <a href="#pricing">Pricing</a>
+  </div>
+  <a class="nav-cta" href="/docs">Get API Key &rarr;</a>
+</nav>
+
+<div class="hero">
+  <div class="badge">&#x2714; REST API &bull; Works from any language</div>
+  <h1>Clean CSV files with<br><em>plain English</em></h1>
+  <p class="subtitle">POST a messy CSV/JSON/xlsx + your instructions &rarr; get clean CSV back. No Python required.</p>
+  <div class="cta-row">
+    <a class="btn-primary" href="/docs">Try it free &rarr;</a>
+    <a class="btn-secondary" href="#how-it-works">See how it works</a>
+  </div>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+      <span>terminal</span>
+      <span></span>
+    </div>
+    <pre><span class="c-muted"># 1. Register (free)</span>
+<span class="c-kw">curl</span> -X POST https://datacleanr-production.up.railway.app/register \\
+  -H <span class="c-str">'Content-Type: application/json'</span> \\
+  -d <span class="c-str">'{"email":"you@example.com"}'</span>
+
+<span class="c-muted"># Returns: {"api_key": "dc_..."}</span>
+
+<span class="c-muted"># 2. Clean your data</span>
+<span class="c-kw">curl</span> -X POST https://datacleanr-production.up.railway.app/transform \\
+  -H <span class="c-str">"X-API-Key: dc_..."</span> \\
+  -F <span class="c-str">"file=@customers.csv"</span> \\
+  -F <span class="c-str">"instructions=remove rows where email is empty, standardize dates to ISO 8601, deduplicate on email keeping newest"</span> \\
+  -o <span class="c-acc">clean.csv</span></pre>
+  </div>
+</div>
+
+<div class="section" id="how-it-works">
+  <div class="section-title">How it works</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>Upload your file</h3>
+        <p>Send any CSV, JSON, or xlsx file up to 10 MB. We auto-detect the format.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>Describe what you want</h3>
+        <p>Write instructions in plain English: <code>remove duplicates</code>, <code>standardize phone numbers</code>, <code>fill blanks with N/A</code> &mdash; anything.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>AI generates &amp; executes a pandas script</h3>
+        <p>Gemini 2.5-flash writes the code. An AST-sandboxed subprocess runs it safely. No network access, no file I/O.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>Get clean CSV back</h3>
+        <p>Response includes <code>X-DataCleanr-Summary</code> and <code>X-DataCleanr-Warning</code> headers with stats.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Built for developers</div>
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">&#x1F5C2;</div>
+      <h3>Any input format</h3>
+      <p>CSV, JSON, and xlsx all work. Auto-detected from file extension and content type.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#x1F512;</div>
+      <h3>Sandboxed execution</h3>
+      <p>Generated code runs in an AST-restricted subprocess. No <code>eval</code>, no network, no disk I/O.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#x26A1;</div>
+      <h3>Any language, any stack</h3>
+      <p>Just HTTP. Works from Go, Node, Ruby, PHP, shell scripts, n8n, Zapier &mdash; anywhere that speaks curl.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#x1F4CA;</div>
+      <h3>Preview before committing</h3>
+      <p>POST to <code>/preview</code> to dry-run on the first 10 rows without spending your quota.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="pricing">
+  <div class="section-title">Simple pricing</div>
+  <div class="pricing">
+    <div class="plan">
+      <div class="plan-name">Free</div>
+      <div class="plan-price">$0 <span>/ month</span></div>
+      <div class="plan-desc">No credit card. Get started in 30 seconds.</div>
+      <ul class="plan-features">
+        <li>500 rows / day</li>
+        <li>CSV, JSON, xlsx input</li>
+        <li>/preview endpoint</li>
+        <li>Full API access</li>
+      </ul>
+      <a class="plan-btn" href="/docs">Get free API key</a>
+    </div>
+    <div class="plan featured">
+      <div class="plan-tag">Most popular</div>
+      <div class="plan-name">Paid</div>
+      <div class="plan-price">$9 <span>/ month</span></div>
+      <div class="plan-desc">For teams and production pipelines.</div>
+      <ul class="plan-features">
+        <li>500,000 rows / day</li>
+        <li>CSV, JSON, xlsx input</li>
+        <li>/preview endpoint</li>
+        <li>Priority support</li>
+      </ul>
+      <a class="plan-btn" href="/docs">Coming soon</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div>
+    <a href="/docs">API Docs</a>
+    <a href="/redoc">ReDoc</a>
+    <a href="https://github.com/Xariall/DataCleanr" target="_blank">GitHub</a>
+  </div>
+  <div style="margin-top:0.75rem">DataCleanr &mdash; clean data, plain English.</div>
+</footer>
+
+</body>
+</html>"""
 
 
 def _get_client() -> genai.Client:
@@ -84,6 +324,11 @@ def _strip_code_fences(text: str) -> str:
     """Remove markdown code fences LLMs sometimes add despite instructions."""
     import re
     return re.sub(r"^```(?:python)?\n?|```$", "", text, flags=re.MULTILINE).strip()
+
+
+@router.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def landing():
+    return HTMLResponse(_LANDING_HTML)
 
 
 @router.get("/health")

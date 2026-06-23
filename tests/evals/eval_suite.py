@@ -1,6 +1,6 @@
 """
 LLM eval suite — 5 transformation scenarios.
-Requires a real ANTHROPIC_API_KEY. Run manually: python -m tests.evals.eval_suite
+Requires a real GEMINI_API_KEY. Run manually: python -m tests.evals.eval_suite
 Results are printed; no assertions (LLM outputs are non-deterministic).
 """
 import asyncio
@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.sandbox import execute_script
-from app.routes import _call_claude, _TRANSFORM_PROMPT
+from app.routes import _call_llm, _TRANSFORM_PROMPT
 from app.format_detect import parse_to_dataframe, build_llm_sample, dataframe_to_csv_bytes
 import pandas as pd
 import io
@@ -63,7 +63,7 @@ async def run_scenario(scenario: dict) -> dict:
     sample, _ = build_llm_sample(df)
     prompt = _TRANSFORM_PROMPT.format(sample=sample, instructions=scenario["instructions"])
 
-    code = await _call_claude(prompt)
+    code = await _call_llm(prompt)
     output = await execute_script(code, dataframe_to_csv_bytes(df))
     out_df = pd.read_csv(io.BytesIO(output))
 
