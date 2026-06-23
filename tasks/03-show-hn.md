@@ -16,7 +16,7 @@ DataCleanr: POST a messy CSV/JSON/xlsx file + plain English instructions → get
 No Python required. Works from any stack: Go, Node, Ruby, PHP, no-code tools, shell scripts.
 
 Quick example:
-  curl -X POST https://datacleanr.app/transform \
+  curl -X POST https://datacleanr-production.up.railway.app/transform \
     -H "X-API-Key: dc_..." \
     -F "file=@customers.csv" \
     -F "instructions=remove rows where email is empty, standardize dates to ISO 8601, deduplicate on email keeping newest row"
@@ -25,7 +25,7 @@ Under the hood: Claude Haiku generates a pandas script → AST-sandboxed subproc
 
 Free tier: 500 rows/day (no credit card). Paid: $9/month for 500K rows/day.
 
-API docs: https://datacleanr.app/docs
+API docs: https://datacleanr-production.up.railway.app/docs
 
 What I'd love feedback on:
 - Does the "no Python required" angle resonate? The main competition is PandasAI which requires a local Python install.
@@ -35,10 +35,11 @@ What I'd love feedback on:
 
 ## Checklist before posting
 
-- [ ] Live URL working (`/health` → 200)
-- [ ] `/docs` Swagger UI looks clean
-- [ ] Free tier test: register + transform small CSV works end-to-end
-- [ ] Stripe checkout tested
+- [x] Live URL working (`/health` → 200)
+- [x] `/docs` Swagger UI looks clean
+- [x] Free tier test: register + transform small CSV works end-to-end
+- [x] Landing page at `/` live
+- [ ] Stripe checkout tested (skip — post free tier first, add paid later)
 - [ ] Post at 9am PT on a weekday (Mon–Wed for best HN traction)
 
 ## Target communities (after HN)

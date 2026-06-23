@@ -1,6 +1,7 @@
 # Task: Railway Deploy
 
 **Priority:** P0 — blocks everything
+**Status:** DONE — https://datacleanr-production.up.railway.app/
 **Status:** Pending
 
 ## Steps
