@@ -342,6 +342,25 @@ async def upgrade():
     return RedirectResponse(url=link, status_code=302)
 
 
+@router.get("/me")
+async def me(request: Request):
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail={"error": "Unauthorized", "code": "MISSING_API_KEY"})
+    try:
+        _, used, limit = await check_row_budget(user, 0)
+    except RuntimeError:
+        used, limit = 0, (int(os.getenv("FREE_DAILY_ROWS", "500")) if user["tier"] == "FREE" else int(os.getenv("PAID_DAILY_ROWS", "500000")))
+    return {
+        "email": user["email"],
+        "tier": user["tier"],
+        "rows_used_today": used,
+        "rows_limit_today": limit,
+        "payment_failing": bool(user["payment_failing"]),
+        "upgrade_url": "/upgrade" if user["tier"] == "FREE" else None,
+    }
+
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}

@@ -77,3 +77,20 @@ def test_preview_no_api_key(client):
     r = client.post("/preview", data={"instructions": "remove nulls"},
                     files={"file": ("data.csv", CSV_FIXTURE, "text/csv")})
     assert r.status_code == 401
+
+
+def test_me_no_api_key(client):
+    r = client.get("/me")
+    assert r.status_code == 401
+
+
+def test_me_returns_user_info(client, registered_user):
+    email, api_key = registered_user
+    r = client.get("/me", headers={"X-API-Key": api_key})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["email"] == email
+    assert data["tier"] == "FREE"
+    assert "rows_used_today" in data
+    assert "rows_limit_today" in data
+    assert data["upgrade_url"] == "/upgrade"
