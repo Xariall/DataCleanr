@@ -231,6 +231,16 @@ _LANDING_HTML = """<!DOCTYPE html>
       <h3>Preview before committing</h3>
       <p>POST to <code>/preview</code> to dry-run on the first 10 rows without spending your quota.</p>
     </div>
+    <div class="feature">
+      <div class="feature-icon">&#x1F4AC;</div>
+      <h3>Explain before running</h3>
+      <p>POST to <code>/explain</code> to get a plain-English breakdown of what your instructions will and won&rsquo;t do.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#x1F504;</div>
+      <h3>Key rotation</h3>
+      <p>POST to <code>/rotate-key</code> to invalidate your old API key and get a new one instantly.</p>
+    </div>
   </div>
 </div>
 
