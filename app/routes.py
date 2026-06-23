@@ -323,6 +323,17 @@ def _strip_code_fences(text: str) -> str:
     return re.sub(r"^```(?:python)?\n?|```$", "", text, flags=re.MULTILINE).strip()
 
 
+def _extract_stderr_hint(runtime_msg: str) -> str:
+    """Pull the most useful line from a TRANSFORM_FAILED message for user display."""
+    prefix = "TRANSFORM_FAILED: "
+    stderr = runtime_msg[len(prefix):] if runtime_msg.startswith(prefix) else runtime_msg
+    for line in reversed(stderr.splitlines()):
+        line = line.strip()
+        if line and any(kw in line for kw in ("Error", "error", "Exception", "KeyError", "ValueError")):
+            return line[:200]
+    return stderr.strip()[:200] or "Unknown error"
+
+
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def landing():
     return HTMLResponse(_LANDING_HTML)
@@ -592,10 +603,17 @@ async def _run_transform(
         )
     except RuntimeError as exc:
         msg = str(exc)
-        logger.error("Sandbox error: %s", msg)
+        logger.error("sandbox_fail user=%s err=%s", user["email"], msg[:300])
         if "TRANSFORM_TIMEOUT" in msg:
-            raise HTTPException(status_code=502, detail={"error": "Transform timed out", "code": "TRANSFORM_TIMEOUT"})
-        raise HTTPException(status_code=502, detail={"error": "Transform failed", "code": "TRANSFORM_FAILED"})
+            raise HTTPException(status_code=502, detail={"error": "Transform timed out", "code": "TRANSFORM_TIMEOUT",
+                                                         "try": "Simplify your instructions or reduce file size"})
+        hint = _extract_stderr_hint(msg)
+        raise HTTPException(status_code=502, detail={
+            "error": "Transform failed",
+            "code": "TRANSFORM_FAILED",
+            "hint": hint,
+            "try": "Try /preview to test on 10 rows first",
+        })
 
     # Validate output
     import io

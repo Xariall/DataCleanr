@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 # Point DB to a temp file for each test session
 _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 os.environ.setdefault("DATABASE_PATH", _tmp_db.name)
-os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
+os.environ.setdefault("GEMINI_API_KEY", "test-key")
 os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_fake")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_fake")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
