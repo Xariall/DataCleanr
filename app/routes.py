@@ -140,38 +140,122 @@ _LANDING_HTML = """<!DOCTYPE html>
     <a href="/docs">API Docs</a>
     <a href="#pricing">Pricing</a>
   </div>
-  <a class="nav-cta" href="/docs">Get API Key &rarr;</a>
+  <a class="nav-cta" href="#register-box" onclick="document.getElementById('reg-email').focus()">Get API Key &rarr;</a>
 </nav>
 
 <div class="hero">
   <div class="badge">&#x2714; REST API &bull; Works from any language</div>
   <h1>Clean CSV files with<br><em>plain English</em></h1>
   <p class="subtitle">POST a messy CSV/JSON/xlsx + your instructions &rarr; get clean CSV back. No Python required.</p>
-  <div class="cta-row">
-    <a class="btn-primary" href="/docs">Try it free &rarr;</a>
-    <a class="btn-secondary" href="#how-it-works">See how it works</a>
+
+  <div id="register-box" style="max-width:480px;margin:0 auto 2.5rem;">
+    <div style="display:flex;gap:0.5rem;">
+      <input id="reg-email" type="email" placeholder="you@example.com"
+        style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+               padding:0.75rem 1rem;color:var(--text);font-size:1rem;outline:none;"
+        onkeydown="if(event.key==='Enter')doRegister()" />
+      <button onclick="doRegister()"
+        style="background:var(--accent);color:#0d0d0f;font-weight:700;padding:0.75rem 1.25rem;
+               border:none;border-radius:var(--r);font-size:1rem;cursor:pointer;white-space:nowrap;">
+        Get free API key &rarr;
+      </button>
+    </div>
+    <div id="reg-msg" style="margin-top:0.75rem;font-size:0.875rem;"></div>
   </div>
 
-  <div class="code-block">
+  <div id="key-box" style="display:none;max-width:720px;margin:0 auto 2.5rem;">
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+        <span>Your API key is ready</span>
+        <button onclick="copyKey()" id="copy-btn"
+          style="background:none;border:1px solid var(--border);color:var(--muted);
+                 padding:0.2rem 0.6rem;border-radius:4px;cursor:pointer;font-size:0.75rem;">copy</button>
+      </div>
+      <pre id="key-display" style="color:var(--accent);font-size:1rem;letter-spacing:0.02em;"></pre>
+    </div>
+    <div class="code-block" style="margin-top:1rem;">
+      <div class="code-block-header">
+        <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+        <span>Next step — clean your first file</span>
+        <span></span>
+      </div>
+      <pre id="curl-display" style="font-size:0.82rem;"></pre>
+    </div>
+  </div>
+
+  <div id="initial-code" class="code-block" style="max-width:720px;margin:0 auto 2.5rem;">
     <div class="code-block-header">
       <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
-      <span>terminal</span>
-      <span></span>
+      <span>terminal</span><span></span>
     </div>
-    <pre><span class="c-muted"># 1. Register (free)</span>
-<span class="c-kw">curl</span> -X POST https://datacleanr-production.up.railway.app/register \\
-  -H <span class="c-str">'Content-Type: application/json'</span> \\
-  -d <span class="c-str">'{"email":"you@example.com"}'</span>
-
-<span class="c-muted"># Returns: {"api_key": "dc_..."}</span>
+    <pre><span class="c-muted"># 1. Register above — get your key instantly</span>
 
 <span class="c-muted"># 2. Clean your data</span>
 <span class="c-kw">curl</span> -X POST https://datacleanr-production.up.railway.app/transform \\
   -H <span class="c-str">"X-API-Key: dc_..."</span> \\
   -F <span class="c-str">"file=@customers.csv"</span> \\
-  -F <span class="c-str">"instructions=remove rows where email is empty, standardize dates to ISO 8601, deduplicate on email keeping newest"</span> \\
+  -F <span class="c-str">"instructions=remove rows where email is empty, standardize dates to ISO 8601"</span> \\
   -o <span class="c-acc">clean.csv</span></pre>
   </div>
+
+  <div style="margin-bottom:2rem;">
+    <a class="btn-secondary" href="#how-it-works">See how it works</a>
+  </div>
+
+<script>
+async function doRegister() {
+  const email = document.getElementById('reg-email').value.trim();
+  const msg = document.getElementById('reg-msg');
+  if (!email || !email.includes('@')) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Enter a valid email address.';
+    return;
+  }
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Registering...';
+  try {
+    const r = await fetch('/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email})
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      const code = data?.detail?.code || 'ERROR';
+      msg.style.color = 'var(--red)';
+      msg.textContent = code === 'EMAIL_EXISTS'
+        ? 'This email is already registered. Check your original API key.'
+        : (data?.detail?.error || 'Something went wrong.');
+      return;
+    }
+    const key = data.api_key;
+    document.getElementById('key-display').textContent = key;
+    document.getElementById('curl-display').innerHTML =
+      '<span style="color:var(--muted)"># Save this key — it won\\'t be shown again</span>\\n' +
+      '<span style="color:var(--yellow)">curl</span> -X POST https://datacleanr-production.up.railway.app/transform \\\\\\n' +
+      '  -H <span style="color:#93c5fd">"X-API-Key: ' + key + '"</span> \\\\\\n' +
+      '  -F <span style="color:#93c5fd">"file=@data.csv"</span> \\\\\\n' +
+      '  -F <span style="color:#93c5fd">"instructions=remove rows where email is empty"</span> \\\\\\n' +
+      '  -o <span style="color:var(--accent)">clean.csv</span>';
+    document.getElementById('register-box').style.display = 'none';
+    document.getElementById('initial-code').style.display = 'none';
+    document.getElementById('key-box').style.display = 'block';
+  } catch(e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error. Try again.';
+  }
+}
+function copyKey() {
+  const key = document.getElementById('key-display').textContent;
+  navigator.clipboard.writeText(key).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'copied!';
+    btn.style.color = 'var(--accent)';
+    setTimeout(() => { btn.textContent = 'copy'; btn.style.color = ''; }, 2000);
+  });
+}
+</script>
 </div>
 
 <div class="section" id="how-it-works">
