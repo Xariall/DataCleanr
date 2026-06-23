@@ -411,7 +411,7 @@ async def _call_llm(prompt: str, max_tokens: int = 2048) -> str:
         contents=prompt,
         config={"max_output_tokens": max_tokens},
     )
-    return _strip_code_fences(response.text.strip())
+    return _normalize_code(_strip_code_fences(response.text.strip()))
 
 
 def _strip_code_fences(text: str) -> str:
@@ -420,6 +420,17 @@ def _strip_code_fences(text: str) -> str:
     text = re.sub(r"^\s*```(?:python|py)?\s*\n?", "", text)
     text = re.sub(r"\n?\s*```\s*$", "", text)
     return text.strip()
+
+
+def _normalize_code(code: str) -> str:
+    """Normalize LLM-generated code: fix line endings, strip BOM and zero-width chars."""
+    # Strip BOM and zero-width characters that cause tokenizer errors
+    code = code.lstrip("﻿​‌‍￾")
+    # Normalize Windows/Mac line endings to Unix
+    code = code.replace("\r\n", "\n").replace("\r", "\n")
+    # Remove null bytes
+    code = code.replace("\x00", "")
+    return code
 
 
 def _extract_stderr_hint(runtime_msg: str) -> str:
