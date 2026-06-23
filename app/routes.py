@@ -22,7 +22,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from .database import create_user, rotate_api_key
+from .database import create_user, get_stats, log_transform, rotate_api_key
 from .format_detect import (
     MAX_FILE_SIZE,
     build_llm_sample,
@@ -381,6 +381,15 @@ async def rotate_key(request: Request):
     }
 
 
+@router.get("/stats")
+async def stats(request: Request):
+    secret = os.getenv("ADMIN_SECRET", "")
+    provided = request.headers.get("X-Admin-Secret", "")
+    if not secret or provided != secret:
+        raise HTTPException(status_code=403, detail={"error": "Forbidden", "code": "FORBIDDEN"})
+    return get_stats()
+
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}
@@ -671,6 +680,7 @@ async def _run_transform(
         "transform_ok user=%s rows_in=%d rows_out=%d llm_ms=%d sandbox_ms=%d total_ms=%d preview=%s fmt=%s",
         user["email"], input_rows, out_rows, llm_ms, sandbox_ms, total_ms, preview, fmt,
     )
+    log_transform(user["id"], input_rows, out_rows, fmt, llm_ms, total_ms, preview)
 
     return Response(
         content=output_csv,

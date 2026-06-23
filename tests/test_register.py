@@ -94,3 +94,19 @@ def test_me_returns_user_info(client, registered_user):
     assert "rows_used_today" in data
     assert "rows_limit_today" in data
     assert data["upgrade_url"] == "/upgrade"
+
+
+def test_stats_no_secret(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_SECRET", "s3cr3t")
+    r = client.get("/stats")
+    assert r.status_code == 403
+
+
+def test_stats_with_secret(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_SECRET", "s3cr3t")
+    r = client.get("/stats", headers={"X-Admin-Secret": "s3cr3t"})
+    assert r.status_code == 200
+    data = r.json()
+    assert "total_users" in data
+    assert "transforms_today" in data
+    assert "rows_processed_today" in data

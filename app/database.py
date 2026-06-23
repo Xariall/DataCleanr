@@ -34,8 +34,22 @@ def init_db() -> None:
                 processed_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transforms_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(id),
+                rows_in     INTEGER NOT NULL,
+                rows_out    INTEGER NOT NULL,
+                fmt         TEXT    NOT NULL,
+                llm_ms      INTEGER NOT NULL DEFAULT 0,
+                total_ms    INTEGER NOT NULL DEFAULT 0,
+                preview     INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_key_hash ON users(api_key_hash)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email    ON users(email)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_log_created    ON transforms_log(created_at)")
         conn.commit()
 
 
@@ -124,6 +138,42 @@ def downgrade_to_free(subscription_id: str) -> None:
             (subscription_id,),
         )
         conn.commit()
+
+
+def log_transform(user_id: int, rows_in: int, rows_out: int, fmt: str,
+                  llm_ms: int, total_ms: int, preview: bool) -> None:
+    with _conn() as conn:
+        conn.execute(
+            """INSERT INTO transforms_log
+               (user_id, rows_in, rows_out, fmt, llm_ms, total_ms, preview)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, rows_in, rows_out, fmt, llm_ms, total_ms, 1 if preview else 0),
+        )
+        conn.commit()
+
+
+def get_stats() -> dict:
+    with _conn() as conn:
+        total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        users_today = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE date(created_at) = date('now')"
+        ).fetchone()[0]
+        transforms_today = conn.execute(
+            "SELECT COUNT(*) FROM transforms_log WHERE date(created_at) = date('now') AND preview = 0"
+        ).fetchone()[0]
+        rows_today = conn.execute(
+            "SELECT COALESCE(SUM(rows_in), 0) FROM transforms_log WHERE date(created_at) = date('now') AND preview = 0"
+        ).fetchone()[0]
+        avg_latency = conn.execute(
+            "SELECT COALESCE(AVG(total_ms), 0) FROM transforms_log WHERE date(created_at) = date('now')"
+        ).fetchone()[0]
+    return {
+        "total_users": total_users,
+        "users_today": users_today,
+        "transforms_today": transforms_today,
+        "rows_processed_today": rows_today,
+        "avg_latency_ms": round(avg_latency),
+    }
 
 
 def record_stripe_event(event_id: str) -> bool:
