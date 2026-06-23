@@ -12,7 +12,6 @@ def _seconds_until_midnight() -> int:
     midnight = now.replace(hour=23, minute=59, second=59, microsecond=0)
     return max(0, int((midnight - now).total_seconds()))
 
-from google import genai
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from tenacity import (
@@ -35,6 +34,9 @@ from .sandbox import execute_script
 
 router = APIRouter()
 
+# Provider selection: OpenRouter takes priority over Gemini
+_OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
+_OPENROUTER_MODEL = os.getenv("LLM_MODEL", "anthropic/claude-haiku-4-5")
 _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 
 _LANDING_HTML = """<!DOCTYPE html>
@@ -361,8 +363,17 @@ function copyKey() {
 </html>"""
 
 
-def _get_client() -> genai.Client:
-    return genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+def _get_gemini_client():
+    from google import genai as _genai
+    return _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+
+def _get_openrouter_client():
+    from openai import AsyncOpenAI
+    return AsyncOpenAI(
+        api_key=_OPENROUTER_KEY,
+        base_url="https://openrouter.ai/api/v1",
+    )
 
 MAX_INSTRUCTIONS = 2000
 PREVIEW_ROWS = 10
@@ -406,12 +417,24 @@ Keep each field to 1-2 sentences. Be specific about column names if mentioned.""
     reraise=True,
 )
 async def _call_llm(prompt: str, max_tokens: int = 2048) -> str:
-    response = await _get_client().aio.models.generate_content(
-        model=_GEMINI_MODEL,
-        contents=prompt,
-        config={"max_output_tokens": max_tokens},
-    )
-    return _normalize_code(_strip_code_fences(response.text.strip()))
+    if _OPENROUTER_KEY:
+        client = _get_openrouter_client()
+        response = await client.chat.completions.create(
+            model=_OPENROUTER_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            extra_headers={"HTTP-Referer": "https://datacleanr-production.up.railway.app"},
+        )
+        text = response.choices[0].message.content or ""
+    else:
+        client = _get_gemini_client()
+        response = await client.aio.models.generate_content(
+            model=_GEMINI_MODEL,
+            contents=prompt,
+            config={"max_output_tokens": max_tokens},
+        )
+        text = response.text or ""
+    return _normalize_code(_strip_code_fences(text.strip()))
 
 
 def _strip_code_fences(text: str) -> str:
