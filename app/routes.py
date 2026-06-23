@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 from google import genai
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -252,7 +252,7 @@ _LANDING_HTML = """<!DOCTYPE html>
         <li>/preview endpoint</li>
         <li>Priority support</li>
       </ul>
-      <a class="plan-btn" href="/docs">Coming soon</a>
+      <a class="plan-btn" href="/upgrade">Upgrade &rarr;</a>
     </div>
   </div>
 </div>
@@ -329,6 +329,17 @@ def _strip_code_fences(text: str) -> str:
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def landing():
     return HTMLResponse(_LANDING_HTML)
+
+
+@router.get("/upgrade")
+async def upgrade():
+    link = os.getenv("STRIPE_PAYMENT_LINK", "")
+    if not link:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "Upgrade not available yet — check back soon", "code": "UPGRADE_UNAVAILABLE"},
+        )
+    return RedirectResponse(url=link, status_code=302)
 
 
 @router.get("/health")

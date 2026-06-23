@@ -33,6 +33,28 @@ def test_health(client):
     assert r.json() == {"status": "ok"}
 
 
+def test_landing_page(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert "DataCleanr" in r.text
+    assert "curl" in r.text
+
+
+def test_upgrade_no_link(client, monkeypatch):
+    monkeypatch.delenv("STRIPE_PAYMENT_LINK", raising=False)
+    r = client.get("/upgrade", follow_redirects=False)
+    assert r.status_code == 503
+    assert r.json()["detail"]["code"] == "UPGRADE_UNAVAILABLE"
+
+
+def test_upgrade_with_link(client, monkeypatch):
+    monkeypatch.setenv("STRIPE_PAYMENT_LINK", "https://buy.stripe.com/test_abc")
+    r = client.get("/upgrade", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"] == "https://buy.stripe.com/test_abc"
+
+
 def test_transform_no_api_key(client):
     r = client.post("/transform", data={"instructions": "remove nulls"},
                     files={"file": ("data.csv", CSV_FIXTURE, "text/csv")})
