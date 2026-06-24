@@ -529,8 +529,8 @@ async def health():
 
 
 async def _send_welcome_email(email: str, api_key: str) -> None:
-    resend_key = os.getenv("RESEND_API_KEY", "")
-    if not resend_key:
+    brevo_key = os.getenv("BREVO_API_KEY", "")
+    if not brevo_key:
         return
     import httpx
     body_html = f"""
@@ -551,23 +551,25 @@ async def _send_welcome_email(email: str, api_key: str) -> None:
   </div>
   <p style="color:#555;font-size:0.8rem;margin-top:1.5rem;">
     <a href="https://datacleanr-production.up.railway.app/docs" style="color:#6ee7b7;">API docs</a>
-    &nbsp;·&nbsp;
-    500 rows/day free
+    &nbsp;&middot;&nbsp;500 rows/day free
   </p>
 </div>"""
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
-                "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+            r = await client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={"api-key": brevo_key, "Content-Type": "application/json"},
                 json={
-                    "from": "DataCleanr <onboarding@resend.dev>",
-                    "to": [email],
+                    "sender": {"name": "DataCleanr", "email": "noreply@datacleanr-production.up.railway.app"},
+                    "to": [{"email": email}],
                     "subject": "Your DataCleanr API key",
-                    "html": body_html,
+                    "htmlContent": body_html,
                 },
             )
-        logger.info("welcome_email_sent to=%s", email)
+        if r.status_code < 300:
+            logger.info("welcome_email_sent to=%s", email)
+        else:
+            logger.warning("welcome_email_failed to=%s status=%d body=%s", email, r.status_code, r.text[:200])
     except Exception as exc:
         logger.warning("welcome_email_failed to=%s err=%s", email, exc)
 
