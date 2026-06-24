@@ -528,6 +528,50 @@ async def health():
     return {"status": "ok"}
 
 
+async def _send_welcome_email(email: str, api_key: str) -> None:
+    resend_key = os.getenv("RESEND_API_KEY", "")
+    if not resend_key:
+        return
+    import httpx
+    body_html = f"""
+<div style="font-family:monospace;max-width:600px;margin:0 auto;background:#0d0d0f;color:#e8e8ed;padding:2rem;border-radius:8px;">
+  <h2 style="color:#6ee7b7;margin-bottom:0.5rem;">DataCleanr</h2>
+  <p style="color:#888;margin-top:0.25rem;">Your API key is ready.</p>
+  <div style="background:#111115;border:1px solid #2a2a30;border-radius:6px;padding:1rem;margin:1.5rem 0;">
+    <code style="color:#6ee7b7;font-size:1rem;word-break:break-all;">{api_key}</code>
+  </div>
+  <p style="color:#888;font-size:0.875rem;">Store this key safely — it will not be shown again.</p>
+  <p style="color:#888;font-size:0.875rem;margin-top:1.5rem;">Quick start:</p>
+  <div style="background:#111115;border:1px solid #2a2a30;border-radius:6px;padding:1rem;">
+    <code style="color:#e8e8ed;font-size:0.8rem;white-space:pre-wrap;">curl -X POST https://datacleanr-production.up.railway.app/transform \\
+  -H "X-API-Key: {api_key}" \\
+  -F "file=@data.csv" \\
+  -F "instructions=remove rows where email is empty" \\
+  -o clean.csv</code>
+  </div>
+  <p style="color:#555;font-size:0.8rem;margin-top:1.5rem;">
+    <a href="https://datacleanr-production.up.railway.app/docs" style="color:#6ee7b7;">API docs</a>
+    &nbsp;·&nbsp;
+    500 rows/day free
+  </p>
+</div>"""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={
+                    "from": "DataCleanr <noreply@datacleanr.app>",
+                    "to": [email],
+                    "subject": "Your DataCleanr API key",
+                    "html": body_html,
+                },
+            )
+        logger.info("welcome_email_sent to=%s", email)
+    except Exception as exc:
+        logger.warning("welcome_email_failed to=%s err=%s", email, exc)
+
+
 @router.post("/register")
 async def register(request: Request):
     body = await request.json()
@@ -552,9 +596,14 @@ async def register(request: Request):
                 "try": "Use your existing API key, or contact support.",
             },
         )
+
+    # Send welcome email (best-effort — never fail the registration if email fails)
+    import asyncio
+    asyncio.create_task(_send_welcome_email(email, api_key))
+
     return {
         "api_key": api_key,
-        "message": "Store this key safely — it will not be shown again.",
+        "message": "Your API key has been sent to your email. Store it safely — it will not be shown again.",
         "next_step": (
             f'curl -X POST https://datacleanr-production.up.railway.app/transform'
             f' -H "X-API-Key: {api_key}"'
