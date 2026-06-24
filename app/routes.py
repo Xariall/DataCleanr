@@ -529,10 +529,17 @@ async def health():
 
 
 async def _send_welcome_email(email: str, api_key: str) -> None:
-    brevo_key = os.getenv("BREVO_API_KEY", "")
-    if not brevo_key:
+    import asyncio
+    import smtplib
+    import ssl
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    gmail_user = os.getenv("GMAIL_USER", "")
+    gmail_password = os.getenv("GMAIL_APP_PASSWORD", "")
+    if not gmail_user or not gmail_password:
         return
-    import httpx
+
     body_html = f"""
 <div style="font-family:monospace;max-width:600px;margin:0 auto;background:#0d0d0f;color:#e8e8ed;padding:2rem;border-radius:8px;">
   <h2 style="color:#6ee7b7;margin-bottom:0.5rem;">DataCleanr</h2>
@@ -540,36 +547,37 @@ async def _send_welcome_email(email: str, api_key: str) -> None:
   <div style="background:#111115;border:1px solid #2a2a30;border-radius:6px;padding:1rem;margin:1.5rem 0;">
     <code style="color:#6ee7b7;font-size:1rem;word-break:break-all;">{api_key}</code>
   </div>
-  <p style="color:#888;font-size:0.875rem;">Store this key safely — it will not be shown again.</p>
+  <p style="color:#888;font-size:0.875rem;">Store this key safely - it will not be shown again.</p>
   <p style="color:#888;font-size:0.875rem;margin-top:1.5rem;">Quick start:</p>
   <div style="background:#111115;border:1px solid #2a2a30;border-radius:6px;padding:1rem;">
-    <code style="color:#e8e8ed;font-size:0.8rem;white-space:pre-wrap;">curl -X POST https://datacleanr-production.up.railway.app/transform \\
-  -H "X-API-Key: {api_key}" \\
-  -F "file=@data.csv" \\
-  -F "instructions=remove rows where email is empty" \\
+    <code style="color:#e8e8ed;font-size:0.8rem;white-space:pre-wrap;">curl -X POST https://datacleanr-production.up.railway.app/transform \
+  -H "X-API-Key: {api_key}" \
+  -F "file=@data.csv" \
+  -F "instructions=remove rows where email is empty" \
   -o clean.csv</code>
   </div>
   <p style="color:#555;font-size:0.8rem;margin-top:1.5rem;">
     <a href="https://datacleanr-production.up.railway.app/docs" style="color:#6ee7b7;">API docs</a>
-    &nbsp;&middot;&nbsp;500 rows/day free
+    &nbsp;&#183;&nbsp;500 rows/day free
   </p>
 </div>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Your DataCleanr API key"
+    msg["From"] = f"DataCleanr <{gmail_user}>"
+    msg["To"] = email
+    msg.attach(MIMEText(body_html, "html"))
+
+    def _send() -> None:
+        context = ssl.create_default_context()
+        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+            smtp.starttls(context=context)
+            smtp.login(gmail_user, gmail_password)
+            smtp.sendmail(gmail_user, email, msg.as_string())
+
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post(
-                "https://api.brevo.com/v3/smtp/email",
-                headers={"api-key": brevo_key, "Content-Type": "application/json"},
-                json={
-                    "sender": {"name": "DataCleanr", "email": "noreply@datacleanr-production.up.railway.app"},
-                    "to": [{"email": email}],
-                    "subject": "Your DataCleanr API key",
-                    "htmlContent": body_html,
-                },
-            )
-        if r.status_code < 300:
-            logger.info("welcome_email_sent to=%s", email)
-        else:
-            logger.warning("welcome_email_failed to=%s status=%d body=%s", email, r.status_code, r.text[:200])
+        await asyncio.to_thread(_send)
+        logger.info("welcome_email_sent to=%s", email)
     except Exception as exc:
         logger.warning("welcome_email_failed to=%s err=%s", email, exc)
 
