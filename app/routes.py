@@ -538,24 +538,27 @@ async def test_email(request: Request):
 
     import httpx
 
-    mj_key = os.getenv("MAILJET_API_KEY", "")
-    mj_secret = os.getenv("MAILJET_SECRET_KEY", "")
-    sender = os.getenv("MAILJET_SENDER_EMAIL", "")
-    if not mj_key or not mj_secret or not sender:
-        return {"ok": False, "error": "MAILJET_API_KEY / MAILJET_SECRET_KEY / MAILJET_SENDER_EMAIL not set"}
+    import httpx
+
+    pm_token = os.getenv("POSTMARK_SERVER_TOKEN", "")
+    sender = os.getenv("POSTMARK_SENDER_EMAIL", "")
+    if not pm_token or not sender:
+        return {"ok": False, "error": "POSTMARK_SERVER_TOKEN or POSTMARK_SENDER_EMAIL not set"}
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
-                "https://api.mailjet.com/v3.1/send",
-                auth=(mj_key, mj_secret),
+                "https://api.postmarkapp.com/email",
+                headers={
+                    "X-Postmark-Server-Token": pm_token,
+                    "Content-Type": "application/json",
+                },
                 json={
-                    "Messages": [{
-                        "From": {"Email": sender, "Name": "DataCleanr"},
-                        "To": [{"Email": to_email}],
-                        "Subject": "DataCleanr test",
-                        "TextPart": "DataCleanr test email — Mailjet is working.",
-                    }]
+                    "From": f"DataCleanr <{sender}>",
+                    "To": to_email,
+                    "Subject": "DataCleanr test",
+                    "TextBody": "DataCleanr test email - Postmark is working.",
+                    "MessageStream": "outbound",
                 },
             )
         if r.status_code < 300:
@@ -573,10 +576,9 @@ async def health():
 async def _send_welcome_email(email: str, api_key: str) -> None:
     import httpx
 
-    mj_key = os.getenv("MAILJET_API_KEY", "")
-    mj_secret = os.getenv("MAILJET_SECRET_KEY", "")
-    sender = os.getenv("MAILJET_SENDER_EMAIL", "")
-    if not mj_key or not mj_secret or not sender:
+    pm_token = os.getenv("POSTMARK_SERVER_TOKEN", "")
+    sender = os.getenv("POSTMARK_SENDER_EMAIL", "")
+    if not pm_token or not sender:
         return
 
     body_html = f"""
@@ -604,15 +606,17 @@ async def _send_welcome_email(email: str, api_key: str) -> None:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
-                "https://api.mailjet.com/v3.1/send",
-                auth=(mj_key, mj_secret),
+                "https://api.postmarkapp.com/email",
+                headers={
+                    "X-Postmark-Server-Token": pm_token,
+                    "Content-Type": "application/json",
+                },
                 json={
-                    "Messages": [{
-                        "From": {"Email": sender, "Name": "DataCleanr"},
-                        "To": [{"Email": email}],
-                        "Subject": "Your DataCleanr API key",
-                        "HTMLPart": body_html,
-                    }]
+                    "From": f"DataCleanr <{sender}>",
+                    "To": email,
+                    "Subject": "Your DataCleanr API key",
+                    "HtmlBody": body_html,
+                    "MessageStream": "outbound",
                 },
             )
         if r.status_code < 300:
