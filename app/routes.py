@@ -170,12 +170,20 @@ _LANDING_HTML = """<!DOCTYPE html>
       <div class="code-block-header">
         <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
         <span>Your API key is ready</span>
-        <button onclick="copyKey()" id="copy-btn"
-          style="background:none;border:1px solid var(--border);color:var(--muted);
-                 padding:0.2rem 0.6rem;border-radius:4px;cursor:pointer;font-size:0.75rem;">copy</button>
+        <div style="display:flex;gap:0.5rem;">
+          <button onclick="copyKey()" id="copy-btn"
+            style="background:none;border:1px solid var(--border);color:var(--muted);
+                   padding:0.2rem 0.6rem;border-radius:4px;cursor:pointer;font-size:0.75rem;">copy</button>
+          <button onclick="mailtoKey()" id="mailto-btn"
+            style="background:none;border:1px solid var(--border);color:var(--muted);
+                   padding:0.2rem 0.6rem;border-radius:4px;cursor:pointer;font-size:0.75rem;">email to myself</button>
+        </div>
       </div>
       <pre id="key-display" style="color:var(--accent);font-size:1rem;letter-spacing:0.02em;"></pre>
     </div>
+    <p style="font-size:0.78rem;color:var(--accent);margin-top:0.6rem;text-align:center;">
+      &#x2713; Key saved in this browser — you can return here to see it again
+    </p>
     <div class="code-block" style="margin-top:1rem;">
       <div class="code-block-header">
         <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
@@ -206,6 +214,22 @@ _LANDING_HTML = """<!DOCTYPE html>
   </div>
 
 <script>
+function showKey(key, email) {
+  localStorage.setItem('dc_api_key', key);
+  if (email) localStorage.setItem('dc_email', email);
+  document.getElementById('key-display').textContent = key;
+  document.getElementById('curl-display').innerHTML =
+    '<span style="color:var(--muted)"># Clean your data</span>\\n' +
+    '<span style="color:var(--yellow)">curl</span> -X POST https://datacleanr-production.up.railway.app/transform \\\\\\n' +
+    '  -H <span style="color:#93c5fd">"X-API-Key: ' + key + '"</span> \\\\\\n' +
+    '  -F <span style="color:#93c5fd">"file=@data.csv"</span> \\\\\\n' +
+    '  -F <span style="color:#93c5fd">"instructions=remove rows where email is empty"</span> \\\\\\n' +
+    '  -o <span style="color:var(--accent)">clean.csv</span>';
+  document.getElementById('register-box').style.display = 'none';
+  document.getElementById('initial-code').style.display = 'none';
+  document.getElementById('key-box').style.display = 'block';
+}
+
 async function doRegister() {
   const email = document.getElementById('reg-email').value.trim();
   const msg = document.getElementById('reg-msg');
@@ -226,28 +250,25 @@ async function doRegister() {
     if (!r.ok) {
       const code = data?.detail?.code || 'ERROR';
       msg.style.color = 'var(--red)';
-      msg.textContent = code === 'EMAIL_EXISTS'
-        ? 'This email is already registered. Check your original API key.'
-        : (data?.detail?.error || 'Something went wrong.');
+      if (code === 'EMAIL_EXISTS') {
+        const saved = localStorage.getItem('dc_api_key');
+        if (saved) {
+          msg.innerHTML = 'Already registered. <a href="#" onclick="showKey(localStorage.getItem(\\'dc_api_key\\'),null);return false;" style="color:var(--accent)">Show your saved key</a>';
+        } else {
+          msg.textContent = 'Already registered — use /rotate-key to get a new key if you lost yours.';
+        }
+      } else {
+        msg.textContent = data?.detail?.error || 'Something went wrong.';
+      }
       return;
     }
-    const key = data.api_key;
-    document.getElementById('key-display').textContent = key;
-    document.getElementById('curl-display').innerHTML =
-      '<span style="color:var(--muted)"># Save this key — it won\\'t be shown again</span>\\n' +
-      '<span style="color:var(--yellow)">curl</span> -X POST https://datacleanr-production.up.railway.app/transform \\\\\\n' +
-      '  -H <span style="color:#93c5fd">"X-API-Key: ' + key + '"</span> \\\\\\n' +
-      '  -F <span style="color:#93c5fd">"file=@data.csv"</span> \\\\\\n' +
-      '  -F <span style="color:#93c5fd">"instructions=remove rows where email is empty"</span> \\\\\\n' +
-      '  -o <span style="color:var(--accent)">clean.csv</span>';
-    document.getElementById('register-box').style.display = 'none';
-    document.getElementById('initial-code').style.display = 'none';
-    document.getElementById('key-box').style.display = 'block';
+    showKey(data.api_key, email);
   } catch(e) {
     msg.style.color = 'var(--red)';
     msg.textContent = 'Network error. Try again.';
   }
 }
+
 function copyKey() {
   const key = document.getElementById('key-display').textContent;
   navigator.clipboard.writeText(key).then(() => {
@@ -257,6 +278,19 @@ function copyKey() {
     setTimeout(() => { btn.textContent = 'copy'; btn.style.color = ''; }, 2000);
   });
 }
+
+function mailtoKey() {
+  const key = document.getElementById('key-display').textContent;
+  const email = localStorage.getItem('dc_email') || '';
+  const body = 'My DataCleanr API key:\\n\\n' + key + '\\n\\nhttps://datacleanr-production.up.railway.app/docs';
+  window.location.href = 'mailto:' + email + '?subject=My%20DataCleanr%20API%20key&body=' + encodeURIComponent(body);
+}
+
+// On page load: restore key from localStorage if present
+(function() {
+  const saved = localStorage.getItem('dc_api_key');
+  if (saved) showKey(saved, null);
+})();
 </script>
 </div>
 
