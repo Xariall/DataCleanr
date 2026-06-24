@@ -536,31 +536,31 @@ async def test_email(request: Request):
     if not to_email or "@" not in to_email:
         raise HTTPException(status_code=400, detail={"error": "email required"})
 
-    gmail_user = os.getenv("GMAIL_USER", "")
-    gmail_password = os.getenv("GMAIL_APP_PASSWORD", "")
-    if not gmail_user or not gmail_password:
-        return {"ok": False, "error": "GMAIL_USER or GMAIL_APP_PASSWORD not set in env"}
+    import httpx
 
-    import asyncio
-    import smtplib
-    import ssl
-    from email.mime.text import MIMEText
-
-    msg = MIMEText("DataCleanr test email — SMTP is working.", "plain")
-    msg["Subject"] = "DataCleanr test"
-    msg["From"] = f"DataCleanr <{gmail_user}>"
-    msg["To"] = to_email
-
-    def _send():
-        context = ssl.create_default_context()
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-            smtp.starttls(context=context)
-            smtp.login(gmail_user, gmail_password)
-            smtp.sendmail(gmail_user, to_email, msg.as_string())
+    mj_key = os.getenv("MAILJET_API_KEY", "")
+    mj_secret = os.getenv("MAILJET_SECRET_KEY", "")
+    sender = os.getenv("MAILJET_SENDER_EMAIL", "")
+    if not mj_key or not mj_secret or not sender:
+        return {"ok": False, "error": "MAILJET_API_KEY / MAILJET_SECRET_KEY / MAILJET_SENDER_EMAIL not set"}
 
     try:
-        await asyncio.to_thread(_send)
-        return {"ok": True, "sent_to": to_email}
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                "https://api.mailjet.com/v3.1/send",
+                auth=(mj_key, mj_secret),
+                json={
+                    "Messages": [{
+                        "From": {"Email": sender, "Name": "DataCleanr"},
+                        "To": [{"Email": to_email}],
+                        "Subject": "DataCleanr test",
+                        "TextPart": "DataCleanr test email — Mailjet is working.",
+                    }]
+                },
+            )
+        if r.status_code < 300:
+            return {"ok": True, "sent_to": to_email}
+        return {"ok": False, "status": r.status_code, "error": r.text[:300]}
     except Exception as exc:
         return {"ok": False, "error": str(exc), "type": type(exc).__name__}
 
@@ -571,15 +571,12 @@ async def health():
 
 
 async def _send_welcome_email(email: str, api_key: str) -> None:
-    import asyncio
-    import smtplib
-    import ssl
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
+    import httpx
 
-    gmail_user = os.getenv("GMAIL_USER", "")
-    gmail_password = os.getenv("GMAIL_APP_PASSWORD", "")
-    if not gmail_user or not gmail_password:
+    mj_key = os.getenv("MAILJET_API_KEY", "")
+    mj_secret = os.getenv("MAILJET_SECRET_KEY", "")
+    sender = os.getenv("MAILJET_SENDER_EMAIL", "")
+    if not mj_key or not mj_secret or not sender:
         return
 
     body_html = f"""
@@ -604,22 +601,24 @@ async def _send_welcome_email(email: str, api_key: str) -> None:
   </p>
 </div>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Your DataCleanr API key"
-    msg["From"] = f"DataCleanr <{gmail_user}>"
-    msg["To"] = email
-    msg.attach(MIMEText(body_html, "html"))
-
-    def _send() -> None:
-        context = ssl.create_default_context()
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-            smtp.starttls(context=context)
-            smtp.login(gmail_user, gmail_password)
-            smtp.sendmail(gmail_user, email, msg.as_string())
-
     try:
-        await asyncio.to_thread(_send)
-        logger.info("welcome_email_sent to=%s", email)
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                "https://api.mailjet.com/v3.1/send",
+                auth=(mj_key, mj_secret),
+                json={
+                    "Messages": [{
+                        "From": {"Email": sender, "Name": "DataCleanr"},
+                        "To": [{"Email": email}],
+                        "Subject": "Your DataCleanr API key",
+                        "HTMLPart": body_html,
+                    }]
+                },
+            )
+        if r.status_code < 300:
+            logger.info("welcome_email_sent to=%s", email)
+        else:
+            logger.warning("welcome_email_failed to=%s status=%d body=%s", email, r.status_code, r.text[:300])
     except Exception as exc:
         logger.warning("welcome_email_failed to=%s err=%s", email, exc)
 
