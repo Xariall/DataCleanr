@@ -561,7 +561,7 @@ async def _send_welcome_email(email: str, api_key: str) -> None:
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
                 json={
-                    "from": "DataCleanr <noreply@datacleanr.app>",
+                    "from": "DataCleanr <onboarding@resend.dev>",
                     "to": [email],
                     "subject": "Your DataCleanr API key",
                     "html": body_html,
