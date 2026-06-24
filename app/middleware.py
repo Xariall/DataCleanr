@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse, Response
 from .database import get_user_by_key_hash, hash_key
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-FREE_DAILY_ROWS = int(os.getenv("FREE_DAILY_ROWS", "500"))
+FREE_DAILY_ROWS = int(os.getenv("FREE_DAILY_ROWS", "5000"))
 PAID_DAILY_ROWS = int(os.getenv("PAID_DAILY_ROWS", "500000"))
 RATE_LIMIT_TTL = 86400  # 24 h in seconds
 REDIS_TIMEOUT = 1.0     # seconds before we consider Redis unavailable

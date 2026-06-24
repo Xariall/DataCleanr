@@ -372,7 +372,7 @@ function mailtoKey() {
       <div class="plan-price">$0 <span>/ month</span></div>
       <div class="plan-desc">No credit card. Get started in 30 seconds.</div>
       <ul class="plan-features">
-        <li>500 rows / day</li>
+        <li>5,000 rows / day</li>
         <li>CSV, JSON, xlsx input</li>
         <li>/preview — dry-run first 10 rows</li>
         <li>/me — check your daily usage</li>
@@ -633,7 +633,7 @@ async def _send_welcome_email(email: str, api_key: str) -> None:
   </div>
   <p style="color:#555;font-size:0.8rem;margin-top:1.5rem;">
     <a href="https://datacleanr-production.up.railway.app/docs" style="color:#6ee7b7;">API docs</a>
-    &nbsp;&#183;&nbsp;500 rows/day free
+    &nbsp;&#183;&nbsp;5,000 rows/day free
   </p>
 </div>"""
 
