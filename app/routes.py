@@ -557,7 +557,7 @@ async def stats(request: Request):
     return get_stats()
 
 
-@router.post("/admin/test-email")
+@router.post("/admin/test-email", include_in_schema=False)
 async def test_email(request: Request):
     """Admin: send a test email and return the real result (not fire-and-forget)."""
     secret = os.getenv("ADMIN_SECRET", "")
