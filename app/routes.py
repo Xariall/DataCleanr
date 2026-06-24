@@ -378,7 +378,7 @@ function mailtoKey() {
         <li>/me — check your daily usage</li>
         <li>Full API access at /docs</li>
       </ul>
-      <a class="plan-btn" href="/docs">Get free API key &rarr;</a>
+      <a class="plan-btn" href="#register-box" onclick="document.getElementById('reg-email').focus()">Get free API key &rarr;</a>
     </div>
   </div>
   <p style="text-align:center;margin-top:1.5rem;font-size:0.875rem;color:var(--muted);">Need higher limits? <a href="mailto:supersanin45@gmail.com">Contact us</a></p>
