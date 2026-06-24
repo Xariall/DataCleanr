@@ -523,6 +523,48 @@ async def stats(request: Request):
     return get_stats()
 
 
+@router.post("/admin/test-email")
+async def test_email(request: Request):
+    """Admin: send a test email and return the real result (not fire-and-forget)."""
+    secret = os.getenv("ADMIN_SECRET", "")
+    provided = request.headers.get("X-Admin-Secret", "")
+    if not secret or provided != secret:
+        raise HTTPException(status_code=403, detail={"error": "Forbidden", "code": "FORBIDDEN"})
+
+    body = await request.json()
+    to_email = str(body.get("email", "")).strip()
+    if not to_email or "@" not in to_email:
+        raise HTTPException(status_code=400, detail={"error": "email required"})
+
+    gmail_user = os.getenv("GMAIL_USER", "")
+    gmail_password = os.getenv("GMAIL_APP_PASSWORD", "")
+    if not gmail_user or not gmail_password:
+        return {"ok": False, "error": "GMAIL_USER or GMAIL_APP_PASSWORD not set in env"}
+
+    import asyncio
+    import smtplib
+    import ssl
+    from email.mime.text import MIMEText
+
+    msg = MIMEText("DataCleanr test email — SMTP is working.", "plain")
+    msg["Subject"] = "DataCleanr test"
+    msg["From"] = f"DataCleanr <{gmail_user}>"
+    msg["To"] = to_email
+
+    def _send():
+        context = ssl.create_default_context()
+        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+            smtp.starttls(context=context)
+            smtp.login(gmail_user, gmail_password)
+            smtp.sendmail(gmail_user, to_email, msg.as_string())
+
+    try:
+        await asyncio.to_thread(_send)
+        return {"ok": True, "sent_to": to_email}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "type": type(exc).__name__}
+
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}
