@@ -829,16 +829,23 @@ async def _run_transform(
         allowed = True
 
     if not preview and not allowed:
+        remaining = max(0, limit - used)
         raise HTTPException(
             status_code=429,
             headers={
                 "X-RateLimit-Limit": str(limit),
-                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Remaining": str(remaining),
                 "X-RateLimit-Reset": str(_seconds_until_midnight()),
             },
             detail={
-                "error": f"Daily row budget exceeded ({used}/{limit})",
+                "error": (
+                    f"File has {row_count} rows but only {remaining} remain in your daily budget "
+                    f"({used} used of {limit}). "
+                    f"Use /preview to process the first 10 rows for free."
+                ),
                 "code": "RATE_LIMIT_EXCEEDED",
+                "rows_in_file": row_count,
+                "rows_remaining": remaining,
                 "retry_after": _seconds_until_midnight(),
             },
         )
